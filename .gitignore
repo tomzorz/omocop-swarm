@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment variables — the Foursquare OAuth token lives here
+.env
+.env.*
+!.env.example
+
+# Tokens and credentials
+*.pem
+*.key
+*.cert
+*.token.json
+.omocop-swarm-token.json
+
+# The archive itself, if anyone ever points SWARM_DATA_DIR at the repo.
+# It defaults to ~/.omocop-swarm and should stay out of here — a decade of
+# location history is not repository content.
+data/
+*.jsonl
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Test artefacts
+coverage/
+
+# Private working notes
+todo.md
+.agents/

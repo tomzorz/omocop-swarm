@@ -1,0 +1,155 @@
+/**
+ * Logging, and the guard that keeps stdout usable.
+ *
+ * An MCP server speaking the stdio transport owns stdout entirely: every byte
+ * on it must be a JSON-RPC frame. A single stray `console.log` — ours, or one
+ * buried in a dependency — corrupts the stream, and the client fails with a
+ * parse error that says nothing about where it came from.
+ *
+ * Two defences, because a lint rule cannot see inside `node_modules`:
+ *   - `no-console` in eslint.config.js, for our own code
+ *   - `installStdoutGuard()`, which redirects the console methods that write to
+ *     stdout onto stderr at runtime, for everyone else's
+ *
+ * Everything here writes to stderr. That is not a limitation to work around; it
+ * is the only correct destination while stdio is the transport.
+ */
+
+export const LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
+const LEVEL_RANK: Record<LogLevel, number> = { error: 0, warn: 1, info: 2, debug: 3 };
+
+function parseLevel(raw: string | undefined): LogLevel {
+  const value = String(raw ?? 'info').trim().toLowerCase();
+  return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : 'info';
+}
+
+/**
+ * Patterns for material that must never reach a log, at any level.
+ *
+ * A Foursquare user token is the whole credential — it does not expire on its
+ * own and there is no refresh token behind it, so one leaked debug line is a
+ * permanent handover of read access to someone's location history. Redacting at
+ * the sink rather than at every call site is what makes it non-recurring: a
+ * caller cannot leak the token by forgetting, only by actively defeating this.
+ *
+ * The token has no distinctive shape of its own (an opaque high-entropy
+ * string), so the patterns key off the names it travels under: the query
+ * parameter, the environment variable, and the JSON field of the auth callback.
+ */
+const REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  // oauth_token=... in a URL or a log line about one.
+  [/(\boauth_token=)[^&\s"']+/gi, '$1<redacted>'],
+  // access_token=... in the implicit-flow fragment.
+  [/(\baccess_token=)[^&\s"']+/gi, '$1<redacted>'],
+  // Bearer headers, however they were assembled.
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/gi, 'Bearer <redacted>'],
+  // Anything self-describing as a token/secret in key=value or JSON form.
+  [
+    /(["']?(?:foursquare_token|oauth_token|access_token|client_?secret|api_?key|password)["']?\s*[:=]\s*["']?)([^"',\s}&]{6,})/gi,
+    '$1<redacted>',
+  ],
+];
+
+/** Strips credential-shaped substrings from a log line. */
+export function redact(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of REDACTIONS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
+function format(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export interface Logger {
+  error(...parts: unknown[]): void;
+  warn(...parts: unknown[]): void;
+  info(...parts: unknown[]): void;
+  debug(...parts: unknown[]): void;
+  readonly level: LogLevel;
+}
+
+/**
+ * Builds a logger writing to stderr.
+ * @param level defaults to $LOG_LEVEL, then 'info'
+ * @param sink defaults to process.stderr — injectable so tests do not race on it
+ */
+export function createLogger(
+  level: LogLevel = parseLevel(process.env['LOG_LEVEL']),
+  sink: (chunk: string) => void = (chunk) => void process.stderr.write(chunk),
+): Logger {
+  const emit = (at: LogLevel, parts: unknown[]): void => {
+    if (LEVEL_RANK[at] > LEVEL_RANK[level]) return;
+    const line = parts.map(format).join(' ');
+    sink(`[omocop-swarm] ${at}: ${redact(line)}\n`);
+  };
+
+  return {
+    level,
+    error: (...parts) => emit('error', parts),
+    warn: (...parts) => emit('warn', parts),
+    info: (...parts) => emit('info', parts),
+    debug: (...parts) => emit('debug', parts),
+  };
+}
+
+/**
+ * Console methods that write to stdout in Node, and so must never reach it.
+ * `console.error`, `console.warn` and `console.trace` write to stderr and are
+ * deliberately absent; `console.dirxml` is an alias of `console.log` and is not.
+ *
+ * Exported so the test can exercise the exact list the guard patches.
+ */
+export const STDOUT_CONSOLE_METHODS = [
+  'log',
+  'info',
+  'debug',
+  'dir',
+  'dirxml',
+  'table',
+  'group',
+  'groupCollapsed',
+  'count',
+  'timeEnd',
+  'timeLog',
+] as const;
+
+/**
+ * Redirects every stdout-writing console method onto stderr.
+ *
+ * Call this before the transport is connected. It is a runtime backstop for
+ * code we do not control — our own code is held to `no-console` by eslint.
+ *
+ * Known gap: a dependency calling `process.stdout.write` directly bypasses the
+ * console entirely and this guard with it. Only the smoke test — which asserts
+ * a real process emits nothing but JSON-RPC frames on stdout — catches that.
+ *
+ * @returns a function restoring the original methods, for tests
+ */
+export function installStdoutGuard(logger: Logger = createLogger()): () => void {
+  const saved = new Map<string, unknown>();
+
+  for (const method of STDOUT_CONSOLE_METHODS) {
+    const original = (console as unknown as Record<string, unknown>)[method];
+    saved.set(method, original);
+    (console as unknown as Record<string, unknown>)[method] = (...parts: unknown[]): void => {
+      logger.debug(`[console.${method} redirected]`, ...parts);
+    };
+  }
+
+  return () => {
+    for (const [method, original] of saved) {
+      (console as unknown as Record<string, unknown>)[method] = original;
+    }
+  };
+}

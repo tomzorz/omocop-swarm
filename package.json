@@ -1,0 +1,69 @@
+{
+  "name": "omocop-swarm",
+  "version": "1.0.0",
+  "description": "Archives your Foursquare/Swarm check-in history to local storage and makes it queryable, over MCP and from the shell",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "omocop-swarm": "./dist/cli/index.js",
+    "omocop-swarm-auth": "./dist/auth/server.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "auth": "node dist/auth/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "lint": "eslint src test",
+    "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run smoke",
+    "prepublishOnly": "npm run verify"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "foursquare",
+    "swarm",
+    "checkins",
+    "archive",
+    "personal-data",
+    "claude"
+  ],
+  "author": "Tamás Deme",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomzorz/omocop-swarm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tomzorz/omocop-swarm/issues"
+  },
+  "homepage": "https://github.com/tomzorz/omocop-swarm#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
