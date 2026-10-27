@@ -1,0 +1,4 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tomzorz/portolan/main/docs/project.schema.json",
+  "description": "Archives a Foursquare/Swarm check-in history to local JSONL plus a SQLite index, and answers questions about it through an MCP server and a CLI over the same tools. Read-only against Foursquare."
+}
