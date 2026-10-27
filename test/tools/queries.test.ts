@@ -28,18 +28,18 @@ const tool = (name: string) => {
   return found;
 };
 
-const call = async (name: string, args: Record<string, unknown> = {}, withToken = false) => {
+const call = async (name: string, args: Record<string, unknown> = {}, foursquare?: FakeFoursquare) => {
   const definition = tool(name);
   const parsed = (await import('zod')).z.object(definition.input).parse(args);
   const context: ToolContext = {
     archive,
-    api: withToken
+    api: foursquare
       ? new FoursquareClient({
           endpoint: 'https://api.foursquare.com/v2/',
           apiVersion: '20250401',
           token: 'test-token',
           logger: space.logger,
-          fetchImpl: new FakeFoursquare().fetch,
+          fetchImpl: foursquare.fetch,
         })
       : undefined,
     config,
@@ -397,12 +397,31 @@ describe('the requirement gate', () => {
         'search-checkins': { query: 'a' },
         'find-filters': { query: 'a' },
         'checkins-near': { lat: 0, lng: 0 },
-        'check-auth-status': { verify: false },
       };
       const args = required[name] ?? {};
       const result = await call(name, args);
       expect(result.isError, name).toBeUndefined();
     }
+  });
+});
+
+describe('check-auth-status', () => {
+  beforeEach(() => {
+    new TokenStore(config, space.logger, space.paths.tokenPath).write('test-token');
+  });
+
+  it('stays offline by default, even with a token and a reachable API', async () => {
+    const foursquare = new FakeFoursquare();
+    const result = await call('check-auth-status', {}, foursquare);
+    expect(foursquare.requests).toHaveLength(0);
+    expect(result.structuredContent?.['verified']).toBeNull();
+  });
+
+  it('asks Foursquare exactly once when told to verify', async () => {
+    const foursquare = new FakeFoursquare();
+    const result = await call('check-auth-status', { verify: true }, foursquare);
+    expect(foursquare.requests.map((request) => request.path)).toEqual(['/v2/users/self']);
+    expect(result.structuredContent?.['verified']).toBe(true);
   });
 });
 

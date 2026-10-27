@@ -61,6 +61,9 @@ describe('the tool surface', () => {
   it('keeps `sync` the only tool that reaches Foursquare', () => {
     // Read-only was the decision. Anything else declaring 'api' means a tool
     // grew a network path, and that is a design change rather than a detail.
+    // check-auth-status declares 'archive' because its one GET is opt-in
+    // (verify, off by default) and it must still answer with no token; the
+    // queries suite pins that it stays offline unless asked.
     expect(tools.filter((tool) => tool.requires === 'api').map((tool) => tool.name)).toEqual([
       'sync',
     ]);

@@ -26,7 +26,7 @@ Every one of those reads local files. None of them contacts Foursquare, none nee
 
 ## Read-only, on purpose
 
-This never writes to Foursquare. It does not check you in, edit a check-in, or delete one. `sync` is the only command that opens a socket, and all it does is GET.
+This never writes to Foursquare. It does not check you in, edit a check-in, or delete one. `sync` is the only command that opens a socket, and all it does is GET. The one exception is `check-auth-status --verify`, which you have to ask for: it sends a single GET to confirm Foursquare still accepts the token.
 
 ## How the archive is stored
 
@@ -82,9 +82,19 @@ So the first sync probes them. Four requests, each constructed so that a working
 
 This matters most for the backfill. Paging by offset through a collection that can grow at the top will skip a row if a check-in arrives mid-run. `sort=oldestfirst` or a pinned `beforeTimestamp` holds the window still; with neither, the sync says so in its output and compares the totals at the end so you know to re-run.
 
-## Commands
+## CLI
 
-Run `omocop-swarm --help` for the list, or `omocop-swarm <command> --help` for one command's flags. Every command takes `--json` if you want to pipe it somewhere.
+Installing the package also installs an `omocop-swarm` binary. Every tool the MCP server registers is a subcommand, and every input field is a flag, derived from the same schema, so the two surfaces cannot drift apart:
+
+```bash
+omocop-swarm --help                          # every subcommand, grouped by area
+omocop-swarm last-visit --help               # one subcommand's flags
+omocop-swarm recent-checkins --limit 5 --format json
+```
+
+Output is text by default, the same prose an MCP client sees. `--format json` prints the structured result the MCP tool returns, and `--json` is shorthand for it. Errors go to stderr in either format, and the exit code says what happened: 0 for success, 1 for a tool error, 2 for a usage mistake. A script should check the exit code rather than parse stdout. `omocop-swarm auth` starts the sign-in server; `authenticate` has no subcommand, because it only exists to hand an MCP model sign-in instructions. Validation, the token requirement and error handling run through the same code path as the MCP server, so the CLI is a second door into the same house. Unlike the MCP server, it runs in your shell, so it also reads `.env` from the working directory (a real environment variable wins).
+
+For a coding agent the CLI is usually the better door: nothing has to be running, output can be trimmed before it reaches the context, and the query subcommands are easy to allow one at a time in a permission list.
 
 Most query commands share the same filters: `--from`, `--to`, `--venue`, `--category`, `--city`, `--country`, `--with-photos`, `--with-shout`, `--with-friends`.
 

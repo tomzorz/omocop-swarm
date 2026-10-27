@@ -15,16 +15,19 @@ export function authTools(store: TokenStore) {
     name: 'check-auth-status',
     title: 'Check the Foursquare sign-in',
     description:
-      'Reports whether a Foursquare token is configured, where it came from, and — when one is ' +
-      'present — whether Foursquare still accepts it. Everything that reads the local archive ' +
-      'works without a token; only sync needs one.',
+      'Reports whether a Foursquare token is configured and where it came from. With verify set, ' +
+      'it also asks Foursquare whether the token is still accepted, the one network call outside ' +
+      'sync. Everything that reads the local archive works without a token; only sync needs one.',
     requires: 'archive',
     annotations: { readOnlyHint: true },
     input: {
       verify: z
         .boolean()
-        .default(true)
-        .describe('Make one API call to confirm the token still works. Set false to stay offline.'),
+        .default(false)
+        .describe(
+          'Make one API call to confirm Foursquare still accepts the token. Off by default, so the ' +
+            'check stays offline unless asked.',
+        ),
     },
     output: {
       configured: z.boolean(),
