@@ -34,7 +34,7 @@ It defaults to 0 because that is the least surprising behaviour for a tool someb
 
 ## Undocumented parameters are probed, not assumed
 
-The current reference for `/users/self/checkins` documents `oauth_token`, `v`, `limit` and `offset`. The older v2 reference also had `afterTimestamp`, `beforeTimestamp` and `sort=oldestfirst`. Those appear to still work.
+The current reference for `/users/self/checkins` documents `oauth_token`, `v`, `limit` and `offset`. The older v2 reference also had `afterTimestamp`, `beforeTimestamp` and `sort=oldestfirst`. Those appear to still work. Mostly they do: probed at `v=20250401`, `afterTimestamp` and `beforeTimestamp` work and `sort=oldestfirst` is silently ignored.
 
 "Appears to still work" is not something to build a sync loop on. So the first sync sends four requests, each constructed so that a working parameter and a silently ignored one produce different answers, and records the verdict in `state.json` against the API version it was probed under.
 
@@ -79,6 +79,8 @@ Three responses, in order of preference:
 1. `sort=oldestfirst` walks from the far end, where nothing is being inserted. Offsets do not move.
 2. A pinned `beforeTimestamp` freezes the window at the instant the backfill began.
 3. Neither available: page by offset, say so in the output, and compare the local total against `response.checkins.count` at the end so a gap is visible and a re-run repairs it.
+
+At `v=20250401` the probe finds `sort=oldestfirst` ignored, so in practice a backfill takes the second route: the pinned `beforeTimestamp` is what keeps it from skipping. The first stays in the code in case a later API version honours the parameter again.
 
 The third is worse than the other two and is still better than pretending. A silent skip is the outcome worth spending design effort to avoid.
 
